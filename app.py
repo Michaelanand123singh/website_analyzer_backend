@@ -9,7 +9,12 @@ import traceback
 
 app = Flask(__name__)
 app.config.from_object(Config)
-CORS(app)
+
+# ✅ Updated CORS settings to allow both localhost and Vercel frontend
+CORS(app, resources={r"/api/*": {"origins": [
+    "http://localhost:5173",
+    "https://website-analyzer-frontend-phi.vercel.app"
+]}})
 
 # Initialize components
 crawler = WebCrawler()
