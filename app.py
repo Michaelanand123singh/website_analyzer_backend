@@ -12,7 +12,7 @@ app.config.from_object(Config)
 
 # ✅ Updated CORS setup to handle preflight and allow Vercel & local dev
 CORS(app, resources={r"/api/*": {"origins": [
-    "http://localhost:3000",
+    "http://localhost:3002",
     "https://website-analyzer-frontend-phi.vercel.app"
 ]}}, supports_credentials=True, allow_headers="*", methods=["GET", "POST", "OPTIONS"])
 
