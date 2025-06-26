@@ -10,11 +10,17 @@ import traceback
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# ✅ Updated CORS settings to allow both localhost and Vercel frontend
+# ✅ Updated CORS setup to handle preflight and allow Vercel & local dev
 CORS(app, resources={r"/api/*": {"origins": [
-    "http://localhost:5173",
+    "http://localhost:3000",
     "https://website-analyzer-frontend-phi.vercel.app"
-]}})
+]}}, supports_credentials=True, allow_headers="*", methods=["GET", "POST", "OPTIONS"])
+
+# ✅ Handle OPTIONS requests early
+@app.before_request
+def handle_options_requests():
+    if request.method == 'OPTIONS':
+        return '', 204
 
 # Initialize components
 crawler = WebCrawler()
@@ -30,33 +36,33 @@ def analyze_website():
     try:
         data = request.get_json()
         url = data.get('url')
-        
+
         if not url:
             return jsonify({'error': 'URL is required'}), 400
-        
+
         if not is_valid_url(url):
             return jsonify({'error': 'Invalid URL format'}), 400
-        
+
         # Step 1: Crawl website
         print(f"Crawling website: {url}")
         crawled_data = crawler.crawl_website(url)
-        
+
         if not crawled_data:
             return jsonify({'error': 'Failed to crawl website. Please check the URL and try again.'}), 400
-        
+
         # Step 2: Analyze with AI (Gemini)
         print("Analyzing with Gemini AI...")
         analysis = analyzer.analyze_website(crawled_data, url)
-        
+
         if not analysis:
             return jsonify({'error': 'AI analysis failed. Please try again.'}), 500
-        
+
         # Step 3: Save to database
         analysis_id = db.save_analysis(url, {
             'crawled_data': crawled_data,
             'analysis': analysis
         })
-        
+
         return jsonify({
             'success': True,
             'analysis_id': analysis_id,
@@ -65,13 +71,12 @@ def analyze_website():
             'timestamp': crawled_data.get('timestamp'),
             'ai_provider': 'gemini'
         })
-        
+
     except Exception as e:
         error_msg = str(e)
         print(f"Error analyzing website: {error_msg}")
         print(traceback.format_exc())
-        
-        # Provide more specific error messages
+
         if "API_KEY" in error_msg.upper():
             return jsonify({'error': 'Gemini API key is missing or invalid. Please check your configuration.'}), 500
         elif "QUOTA" in error_msg.upper() or "RATE_LIMIT" in error_msg.upper():
@@ -87,12 +92,12 @@ def get_analysis(analysis_id):
         result = db.get_analysis(analysis_id)
         if not result:
             return jsonify({'error': 'Analysis not found'}), 404
-        
+
         return jsonify({
             'success': True,
             'data': result
         })
-        
+
     except Exception as e:
         print(f"Error retrieving analysis: {str(e)}")
         return jsonify({'error': 'Failed to retrieve analysis'}), 500
@@ -102,27 +107,26 @@ def get_recent_analyses():
     try:
         limit = request.args.get('limit', 10, type=int)
         recent = db.get_recent_analyses(limit=limit)
-        
+
         return jsonify({
             'success': True,
             'count': len(recent),
             'data': recent
         })
-        
+
     except Exception as e:
         print(f"Error retrieving recent analyses: {str(e)}")
         return jsonify({'error': 'Failed to retrieve recent analyses'}), 500
 
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
-    """Get basic statistics about analyses performed"""
     try:
         stats = db.get_stats()
         return jsonify({
             'success': True,
             'stats': stats
         })
-        
+
     except Exception as e:
         print(f"Error retrieving stats: {str(e)}")
         return jsonify({'error': 'Failed to retrieve statistics'}), 500
@@ -149,5 +153,5 @@ if __name__ == '__main__':
     print("   • GET  /api/stats - Get analysis statistics")
     print("⚠️  Make sure to set GEMINI_API_KEY in your .env file")
     print(f"🌐 Server starting on http://localhost:5000")
-    
+
     app.run(debug=Config.DEBUG, port=5000, host='0.0.0.0')
