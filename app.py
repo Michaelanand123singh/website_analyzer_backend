@@ -11,23 +11,38 @@ from utils import is_valid_url
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# ✅ CORS setup
-CORS(app, resources={r"/api/*": {"origins": [
+# ✅ CORS setup for specific domains
+CORS(app, supports_credentials=True, origins=[
     "http://localhost:3002",
     "https://website-analyzer-frontend-phi.vercel.app",
-    "https://www.nothingbefore.com/"
-]}}, supports_credentials=True, allow_headers="*", methods=["GET", "POST", "OPTIONS"])
+    "https://www.nothingbefore.com"
+])
 
-# ✅ Handle OPTIONS early for preflight
+# ✅ Handle OPTIONS (preflight) requests with proper headers
 @app.before_request
 def handle_options_requests():
     if request.method == 'OPTIONS':
-        return '', 204
+        response = app.make_response('')
+        origin = request.headers.get('Origin')
+        if origin:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = request.headers.get(
+            'Access-Control-Request-Headers', '*')
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
 
 # Initialize components
 crawler = WebCrawler()
 analyzer = AIAnalyzer()
 db = Database()
+
+# ✅ Optional root route for Render health
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({
+        'message': 'Welcome to the AI Website Analyzer API. Visit /api/health for health check.'
+    })
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -44,21 +59,19 @@ def analyze_website():
         if not is_valid_url(url):
             return jsonify({'error': 'Invalid URL format'}), 400
 
-        # Crawl website
+        # Step 1: Crawl website
         print(f"Crawling website: {url}")
         crawled_data = crawler.crawl_website(url)
-
         if not crawled_data:
             return jsonify({'error': 'Failed to crawl website. Please check the URL and try again.'}), 400
 
-        # Analyze with AI (Gemini)
+        # Step 2: Analyze with Gemini
         print("Analyzing with Gemini AI...")
         analysis = analyzer.analyze_website(crawled_data, url)
-
         if not analysis:
             return jsonify({'error': 'AI analysis failed. Please try again.'}), 500
 
-        # Save to DB
+        # Step 3: Save to database
         analysis_id = db.save_analysis(url, {
             'crawled_data': crawled_data,
             'analysis': analysis
@@ -130,6 +143,7 @@ def method_not_allowed(error):
 def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
+# ✅ Start the Flask app with proper port binding for Render
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print("🚀 Starting AI Website Analyzer with Gemini...")
