@@ -15,7 +15,8 @@ app.config.from_object(Config)
 CORS(app, supports_credentials=True, origins=[
     "http://localhost:3002",
     "https://website-analyzer-frontend-phi.vercel.app",
-    "https://www.nothingbefore.com"
+    "https://www.nothingbefore.com",
+    "http://localhost:3000/"
 ])
 
 # ✅ Handle OPTIONS (preflight) requests with proper headers
